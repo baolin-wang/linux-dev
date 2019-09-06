@@ -390,6 +390,12 @@ static void sdhci_sprd_request_done(struct sdhci_host *host,
 	 mmc_request_done(host->mmc, mrq);
 }
 
+static void sdhci_sprd_packed_request_done(struct sdhci_host *host,
+					   struct mmc_packed_request *prq)
+{
+	mmc_hsq_finalize_packed_request(host->mmc, prq);
+}
+
 static struct sdhci_ops sdhci_sprd_ops = {
 	.read_l = sdhci_sprd_readl,
 	.write_l = sdhci_sprd_writel,
@@ -404,6 +410,7 @@ static struct sdhci_ops sdhci_sprd_ops = {
 	.get_max_timeout_count = sdhci_sprd_get_max_timeout_count,
 	.get_ro = sdhci_sprd_get_ro,
 	.request_done = sdhci_sprd_request_done,
+	.packed_request_done = sdhci_sprd_packed_request_done,
 };
 
 static void sdhci_sprd_request(struct mmc_host *mmc, struct mmc_request *mrq)
@@ -546,8 +553,16 @@ static const struct sdhci_pltfm_data sdhci_sprd_pdata = {
 		  SDHCI_QUIRK_MISSING_CAPS,
 	.quirks2 = SDHCI_QUIRK2_BROKEN_HS200 |
 		   SDHCI_QUIRK2_USE_32BIT_BLK_CNT |
-		   SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
+		   SDHCI_QUIRK2_PRESET_VALUE_BROKEN |
+		   SDHCI_QUIRK2_USE_ADMA3_SUPPORT,
 	.ops = &sdhci_sprd_ops,
+};
+
+static const struct hsq_packed_ops packed_ops = {
+	.packed_algo = mmc_hsq_packed_algo_rw,
+	.prepare_hardware = sdhci_prepare_packed,
+	.unprepare_hardware = sdhci_unprepare_packed,
+	.packed_request = sdhci_packed_request,
 };
 
 static int sdhci_sprd_probe(struct platform_device *pdev)
@@ -676,7 +691,18 @@ static int sdhci_sprd_probe(struct platform_device *pdev)
 		goto err_cleanup_host;
 	}
 
-	ret = mmc_hsq_init(hsq, host->mmc, NULL, 0);
+	/*
+	 * If the host controller can support ADMA3 mode, we can enable the
+	 * packed request mode to improve the read/write performance.
+	 *
+	 * Considering the maximum ADMA3 entries (default is 16) and the request
+	 * latency, we set the default maximum packed requests number is 8.
+	 */
+	if (host->flags & SDHCI_USE_ADMA3)
+		ret = mmc_hsq_init(hsq, host->mmc, &packed_ops,
+				   SDHCI_MAX_ADMA3_ENTRIES / 2);
+	else
+		ret = mmc_hsq_init(hsq, host->mmc, NULL, 0);
 	if (ret)
 		goto err_cleanup_host;
 
