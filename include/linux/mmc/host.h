@@ -462,6 +462,9 @@ struct mmc_host {
 	bool			cqe_enabled;
 	bool			cqe_on;
 
+	/* Software Queue support */
+	bool			swq_enabled;
+
 	unsigned long		private[0] ____cacheline_aligned;
 };
 
