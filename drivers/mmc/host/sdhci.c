@@ -1810,16 +1810,11 @@ EXPORT_SYMBOL_GPL(sdhci_set_power);
  *                                                                           *
 \*****************************************************************************/
 
-void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
+static void sdhci_start_request(struct mmc_host *mmc, struct mmc_request *mrq,
+				int present)
 {
-	struct sdhci_host *host;
-	int present;
+	struct sdhci_host *host = mmc_priv(mmc);
 	unsigned long flags;
-
-	host = mmc_priv(mmc);
-
-	/* Firstly check card presence */
-	present = mmc->ops->get_cd(mmc);
 
 	spin_lock_irqsave(&host->lock, flags);
 
@@ -1847,6 +1842,22 @@ void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	}
 
 	spin_unlock_irqrestore(&host->lock, flags);
+}
+
+void sdhci_request_atomic(struct mmc_host *mmc, struct mmc_request *mrq)
+{
+	sdhci_start_request(mmc, mrq, 1);
+}
+EXPORT_SYMBOL_GPL(sdhci_request_atomic);
+
+void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
+{
+	int present;
+
+	/* Firstly check card presence */
+	present = mmc->ops->get_cd(mmc);
+
+	sdhci_start_request(mmc, mrq, present);
 }
 EXPORT_SYMBOL_GPL(sdhci_request);
 
