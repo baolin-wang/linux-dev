@@ -285,11 +285,7 @@ static blk_status_t mmc_mq_queue_rq(struct blk_mq_hw_ctx *hctx,
 		}
 		break;
 	case MMC_ISSUE_ASYNC:
-		/*
-		 * For MMC host software queue, we only allow 2 requests in
-		 * flight to avoid a long latency.
-		 */
-		if (host->swq_enabled && mq->in_flight[issue_type] > 2) {
+		if (mq->use_cqe && mmc_cqe_is_busy(host)) {
 			spin_unlock_irq(&mq->lock);
 			return BLK_STS_RESOURCE;
 		}
@@ -330,7 +326,7 @@ static blk_status_t mmc_mq_queue_rq(struct blk_mq_hw_ctx *hctx,
 
 	blk_mq_start_request(req);
 
-	issued = mmc_blk_mq_issue_rq(mq, req);
+	issued = mmc_blk_mq_issue_rq(mq, req, bd->last);
 
 	switch (issued) {
 	case MMC_REQ_BUSY:
@@ -362,8 +358,19 @@ static blk_status_t mmc_mq_queue_rq(struct blk_mq_hw_ctx *hctx,
 	return ret;
 }
 
+static void mmc_mq_commit_rqs(struct blk_mq_hw_ctx *hctx)
+{
+	struct mmc_queue *mq = hctx->queue->queuedata;
+	struct mmc_card *card = mq->card;
+	struct mmc_host *host = card->host;
+
+	if (mq->use_cqe)
+		mmc_cqe_commit_rqs(host, false);
+}
+
 static const struct blk_mq_ops mmc_mq_ops = {
 	.queue_rq	= mmc_mq_queue_rq,
+	.commit_rqs	= mmc_mq_commit_rqs,
 	.init_request	= mmc_mq_init_request,
 	.exit_request	= mmc_mq_exit_request,
 	.complete	= mmc_blk_mq_complete,
@@ -389,6 +396,9 @@ static void mmc_setup_queue(struct mmc_queue *mq, struct mmc_card *card)
 							mmc_dev(host)),
 		     "merging was advertised but not possible");
 	blk_queue_max_segments(mq->queue, mmc_get_max_segments(host));
+
+	if (host->max_packed_reqs != 0)
+		blk_queue_max_batch_requests(mq->queue, host->max_packed_reqs);
 
 	if (mmc_card_mmc(card))
 		block_size = card->ext_csd.data_sector_size;

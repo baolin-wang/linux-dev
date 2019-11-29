@@ -165,6 +165,12 @@ struct mmc_request {
 	bool			cap_cmd_during_tfr;
 
 	int			tag;
+	struct list_head	list;
+};
+
+struct mmc_packed_request {
+	struct list_head list;
+	u32 nr_reqs;
 };
 
 struct mmc_card;

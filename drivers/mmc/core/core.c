@@ -329,6 +329,7 @@ static int mmc_mrq_prep(struct mmc_host *host, struct mmc_request *mrq)
 		}
 	}
 
+	INIT_LIST_HEAD(&mrq->list);
 	return 0;
 }
 
@@ -535,6 +536,31 @@ void mmc_cqe_post_req(struct mmc_host *host, struct mmc_request *mrq)
 		host->cqe_ops->cqe_post_req(host, mrq);
 }
 EXPORT_SYMBOL(mmc_cqe_post_req);
+
+/**
+ *	mmc_cqe_commit_rqs - Commit requests pending in CQE
+ *	@host: MMC host
+ *	@last: Indicate if the last request from block layer
+ */
+void mmc_cqe_commit_rqs(struct mmc_host *host, bool last)
+{
+	if (host->cqe_ops->cqe_commit_rqs)
+		host->cqe_ops->cqe_commit_rqs(host, last);
+}
+EXPORT_SYMBOL(mmc_cqe_commit_rqs);
+
+/**
+ *	mmc_cqe_is_busy - If CQE is busy or not
+ *	@host: MMC host
+ */
+bool mmc_cqe_is_busy(struct mmc_host *host)
+{
+	if (host->cqe_ops->cqe_is_busy)
+		return host->cqe_ops->cqe_is_busy(host);
+
+	return false;
+}
+EXPORT_SYMBOL(mmc_cqe_is_busy);
 
 /* Arbitrary 1 second timeout */
 #define MMC_CQE_RECOVERY_TIMEOUT	1000

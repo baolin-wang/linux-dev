@@ -1537,7 +1537,8 @@ static int mmc_blk_cqe_issue_flush(struct mmc_queue *mq, struct request *req)
 	return mmc_blk_cqe_start_req(mq->card->host, mrq);
 }
 
-static int mmc_blk_swq_issue_rw_rq(struct mmc_queue *mq, struct request *req)
+static int mmc_blk_swq_issue_rw_rq(struct mmc_queue *mq, struct request *req,
+				   bool last)
 {
 	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
 	struct mmc_host *host = mq->card->host;
@@ -1548,19 +1549,25 @@ static int mmc_blk_swq_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 	mmc_pre_req(host, &mqrq->brq.mrq);
 
 	err = mmc_cqe_start_req(host, &mqrq->brq.mrq);
-	if (err)
+	if (err) {
 		mmc_post_req(host, &mqrq->brq.mrq, err);
+		return err;
+	}
 
-	return err;
+	if (last)
+		mmc_cqe_commit_rqs(host, true);
+
+	return 0;
 }
 
-static int mmc_blk_cqe_issue_rw_rq(struct mmc_queue *mq, struct request *req)
+static int mmc_blk_cqe_issue_rw_rq(struct mmc_queue *mq, struct request *req,
+				   bool last)
 {
 	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
 	struct mmc_host *host = mq->card->host;
 
 	if (host->swq_enabled)
-		return mmc_blk_swq_issue_rw_rq(mq, req);
+		return mmc_blk_swq_issue_rw_rq(mq, req, last);
 
 	mmc_blk_data_prep(mq, mqrq, 0, NULL, NULL);
 
@@ -2236,7 +2243,8 @@ static int mmc_blk_wait_for_idle(struct mmc_queue *mq, struct mmc_host *host)
 	return mmc_blk_rw_wait(mq, NULL);
 }
 
-enum mmc_issued mmc_blk_mq_issue_rq(struct mmc_queue *mq, struct request *req)
+enum mmc_issued mmc_blk_mq_issue_rq(struct mmc_queue *mq, struct request *req,
+				    bool last)
 {
 	struct mmc_blk_data *md = mq->blkdata;
 	struct mmc_card *card = md->queue.card;
@@ -2280,7 +2288,7 @@ enum mmc_issued mmc_blk_mq_issue_rq(struct mmc_queue *mq, struct request *req)
 		case REQ_OP_READ:
 		case REQ_OP_WRITE:
 			if (mq->use_cqe)
-				ret = mmc_blk_cqe_issue_rw_rq(mq, req);
+				ret = mmc_blk_cqe_issue_rw_rq(mq, req, last);
 			else
 				ret = mmc_blk_mq_issue_rw_rq(mq, req);
 			break;

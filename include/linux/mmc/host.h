@@ -216,6 +216,14 @@ struct mmc_cqe_ops {
 	 * will have zero data bytes transferred.
 	 */
 	void	(*cqe_recovery_finish)(struct mmc_host *host);
+
+	/* If CQE is busy or not. */
+	bool	(*cqe_is_busy)(struct mmc_host *host);
+	/*
+	 * Serve the purpose of kicking the hardware to handle pending
+	 * requests.
+	 */
+	void	(*cqe_commit_rqs)(struct mmc_host *host, bool last);
 };
 
 struct mmc_async_req {
@@ -385,6 +393,7 @@ struct mmc_host {
 	unsigned int		max_blk_size;	/* maximum size of one mmc block */
 	unsigned int		max_blk_count;	/* maximum number of blocks in one req */
 	unsigned int		max_busy_timeout; /* max busy timeout in ms */
+	unsigned int		max_packed_reqs;  /* max number of requests can be packed */
 
 	/* private data */
 	spinlock_t		lock;		/* lock for claim and bus ops */

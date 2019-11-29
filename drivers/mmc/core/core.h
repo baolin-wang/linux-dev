@@ -139,6 +139,8 @@ static inline void mmc_claim_host(struct mmc_host *host)
 int mmc_cqe_start_req(struct mmc_host *host, struct mmc_request *mrq);
 void mmc_cqe_post_req(struct mmc_host *host, struct mmc_request *mrq);
 int mmc_cqe_recovery(struct mmc_host *host);
+void mmc_cqe_commit_rqs(struct mmc_host *host, bool last);
+bool mmc_cqe_is_busy(struct mmc_host *host);
 
 /**
  *	mmc_pre_req - Prepare for a new request
