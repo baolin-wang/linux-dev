@@ -337,6 +337,7 @@ struct queue_limits {
 	unsigned int		max_write_zeroes_sectors;
 	unsigned int		discard_granularity;
 	unsigned int		discard_alignment;
+	unsigned int		max_batch_reqs;
 
 	unsigned short		logical_block_size;
 	unsigned short		max_segments;
@@ -1109,6 +1110,8 @@ extern void blk_queue_required_elevator_features(struct request_queue *q,
 						 unsigned int features);
 extern bool blk_queue_can_use_dma_map_merging(struct request_queue *q,
 					      struct device *dev);
+extern void blk_queue_max_batch_requests(struct request_queue *q,
+					 unsigned int max_batch_requests);
 
 /*
  * Number of physical segments as sent to the device.
@@ -1289,6 +1292,11 @@ static inline unsigned short queue_max_discard_segments(const struct request_que
 static inline unsigned int queue_max_segment_size(const struct request_queue *q)
 {
 	return q->limits.max_segment_size;
+}
+
+static inline unsigned int queue_max_batch_requests(const struct request_queue *q)
+{
+	return q->limits.max_batch_reqs;
 }
 
 static inline unsigned short queue_logical_block_size(const struct request_queue *q)

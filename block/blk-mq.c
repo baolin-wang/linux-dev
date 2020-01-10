@@ -1185,8 +1185,6 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 	if (list_empty(list))
 		return false;
 
-	WARN_ON(!list_is_singular(list) && got_budget);
-
 	/*
 	 * Now process all the entries, sending them to the driver.
 	 */

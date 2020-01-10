@@ -4778,29 +4778,37 @@ static int bfq_dispatch_requests(struct blk_mq_hw_ctx *hctx,
 				 struct list_head *list)
 {
 	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
+	unsigned int batch_reqs = queue_max_batch_requests(hctx->queue) ? : 1;
 	struct request *rq;
 	struct bfq_queue *in_serv_queue;
 	bool waiting_rq, idle_timer_disabled;
+	int i;
 
-	spin_lock_irq(&bfqd->lock);
+	for (i = 0; i < batch_reqs; i++) {
+		spin_lock_irq(&bfqd->lock);
 
-	in_serv_queue = bfqd->in_service_queue;
-	waiting_rq = in_serv_queue && bfq_bfqq_wait_request(in_serv_queue);
+		in_serv_queue = bfqd->in_service_queue;
+		waiting_rq = in_serv_queue && bfq_bfqq_wait_request(in_serv_queue);
 
-	rq = __bfq_dispatch_request(hctx);
+		rq = __bfq_dispatch_request(hctx);
 
-	idle_timer_disabled =
-		waiting_rq && !bfq_bfqq_wait_request(in_serv_queue);
+		idle_timer_disabled =
+			waiting_rq && !bfq_bfqq_wait_request(in_serv_queue);
 
-	spin_unlock_irq(&bfqd->lock);
+		spin_unlock_irq(&bfqd->lock);
 
-	bfq_update_dispatch_stats(hctx->queue, rq, in_serv_queue,
-				  idle_timer_disabled);
+		bfq_update_dispatch_stats(hctx->queue, rq, in_serv_queue,
+					  idle_timer_disabled);
 
-	if (!rq)
-		return 0;
+		if (!rq) {
+			if (list_empty(list))
+				return 0;
 
-	list_add(&rq->queuelist, list);
+			return 1;
+		}
+
+		list_add(&rq->queuelist, list);
+	}
 
 	return 1;
 }

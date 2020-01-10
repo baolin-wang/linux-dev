@@ -59,6 +59,7 @@ void blk_set_default_limits(struct queue_limits *lim)
 	lim->io_opt = 0;
 	lim->misaligned = 0;
 	lim->zoned = BLK_ZONED_NONE;
+	lim->max_batch_reqs = 1;
 }
 EXPORT_SYMBOL(blk_set_default_limits);
 
@@ -870,6 +871,18 @@ bool blk_queue_can_use_dma_map_merging(struct request_queue *q,
 	return true;
 }
 EXPORT_SYMBOL_GPL(blk_queue_can_use_dma_map_merging);
+
+/**
+ * blk_queue_max_batch_requests - set max requests for batch processing
+ * @q:	the request queue for the device
+ * @max_batch_requests: maximum number of requests in a batch
+ **/
+void blk_queue_max_batch_requests(struct request_queue *q,
+				  unsigned int max_batch_requests)
+{
+	q->limits.max_batch_reqs = max_batch_requests;
+}
+EXPORT_SYMBOL(blk_queue_max_batch_requests);
 
 static int __init blk_settings_init(void)
 {

@@ -382,16 +382,24 @@ static int dd_dispatch_requests(struct blk_mq_hw_ctx *hctx,
 				struct list_head *list)
 {
 	struct deadline_data *dd = hctx->queue->elevator->elevator_data;
+	unsigned int batch_reqs = queue_max_batch_requests(hctx->queue) ? : 1;
 	struct request *rq;
+	int i;
 
-	spin_lock(&dd->lock);
-	rq = __dd_dispatch_request(dd);
-	spin_unlock(&dd->lock);
+	for (i = 0; i < batch_reqs; i++) {
+		spin_lock(&dd->lock);
+		rq = __dd_dispatch_request(dd);
+		spin_unlock(&dd->lock);
 
-	if (!rq)
-		return 0;
+		if (!rq) {
+			if (list_empty(list))
+				return 0;
 
-	list_add(&rq->queuelist, list);
+			return 1;
+		}
+
+		list_add(&rq->queuelist, list);
+	}
 
 	return 1;
 }

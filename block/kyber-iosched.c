@@ -801,50 +801,56 @@ static int kyber_dispatch_requests(struct blk_mq_hw_ctx *hctx,
 {
 	struct kyber_queue_data *kqd = hctx->queue->elevator->elevator_data;
 	struct kyber_hctx_data *khd = hctx->sched_data;
+	unsigned int batch_reqs = queue_max_batch_requests(hctx->queue) ? : 1;
 	struct request *rq;
-	int i, ret = 0;
+	int i, j, ret = 0;
 
 	spin_lock(&khd->lock);
 
-	/*
-	 * First, if we are still entitled to batch, try to dispatch a request
-	 * from the batch.
-	 */
-	if (khd->batching < kyber_batch_size[khd->cur_domain]) {
-		rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
-		if (rq) {
-			list_add(&rq->queuelist, list);
-			ret = 1;
-			goto out;
+	for (j = 0; j < batch_reqs; j++) {
+		/*
+		 * First, if we are still entitled to batch, try to dispatch a
+		 * request from the batch.
+		 */
+		if (khd->batching < kyber_batch_size[khd->cur_domain]) {
+			rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
+			if (rq) {
+				list_add(&rq->queuelist, list);
+				ret = 1;
+				continue;
+			}
+		}
+
+		/*
+		 * Either,
+		 * 1. We were no longer entitled to a batch.
+		 * 2. The domain we were batching didn't have any requests.
+		 * 3. The domain we were batching was out of tokens.
+		 *
+		 * Start another batch. Note that this wraps back around to the
+		 * original domain if no other domains have requests or tokens.
+		 */
+		khd->batching = 0;
+		for (i = 0; i < KYBER_NUM_DOMAINS; i++) {
+			if (khd->cur_domain == KYBER_NUM_DOMAINS - 1)
+				khd->cur_domain = 0;
+			else
+				khd->cur_domain++;
+
+			rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
+			if (rq) {
+				list_add(&rq->queuelist, list);
+				ret = 1;
+				break;
+			}
 		}
 	}
 
-	/*
-	 * Either,
-	 * 1. We were no longer entitled to a batch.
-	 * 2. The domain we were batching didn't have any requests.
-	 * 3. The domain we were batching was out of tokens.
-	 *
-	 * Start another batch. Note that this wraps back around to the original
-	 * domain if no other domains have requests or tokens.
-	 */
-	khd->batching = 0;
-	for (i = 0; i < KYBER_NUM_DOMAINS; i++) {
-		if (khd->cur_domain == KYBER_NUM_DOMAINS - 1)
-			khd->cur_domain = 0;
-		else
-			khd->cur_domain++;
-
-		rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
-		if (rq) {
-			list_add(&rq->queuelist, list);
-			ret = 1;
-			goto out;
-		}
-	}
-
-out:
 	spin_unlock(&khd->lock);
+
+	if (list_empty(list))
+		ret = 0;
+
 	return ret;
 }
 
