@@ -378,7 +378,8 @@ done:
  * different hardware queue. This is because mq-deadline has shared
  * state for all hardware queues, in terms of sorting, FIFOs, etc.
  */
-static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
+static int dd_dispatch_requests(struct blk_mq_hw_ctx *hctx,
+				struct list_head *list)
 {
 	struct deadline_data *dd = hctx->queue->elevator->elevator_data;
 	struct request *rq;
@@ -387,7 +388,12 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
 	rq = __dd_dispatch_request(dd);
 	spin_unlock(&dd->lock);
 
-	return rq;
+	if (!rq)
+		return 0;
+
+	list_add(&rq->queuelist, list);
+
+	return 1;
 }
 
 static void dd_exit_queue(struct elevator_queue *e)
@@ -774,7 +780,7 @@ static const struct blk_mq_debugfs_attr deadline_queue_debugfs_attrs[] = {
 static struct elevator_type mq_deadline = {
 	.ops = {
 		.insert_requests	= dd_insert_requests,
-		.dispatch_request	= dd_dispatch_request,
+		.dispatch_requests	= dd_dispatch_requests,
 		.prepare_request	= dd_prepare_request,
 		.finish_request		= dd_finish_request,
 		.next_request		= elv_rb_latter_request,

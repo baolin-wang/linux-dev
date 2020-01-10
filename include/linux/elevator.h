@@ -42,7 +42,7 @@ struct elevator_mq_ops {
 	void (*prepare_request)(struct request *, struct bio *bio);
 	void (*finish_request)(struct request *);
 	void (*insert_requests)(struct blk_mq_hw_ctx *, struct list_head *, bool);
-	struct request *(*dispatch_request)(struct blk_mq_hw_ctx *);
+	int (*dispatch_requests)(struct blk_mq_hw_ctx *, struct list_head *);
 	bool (*has_work)(struct blk_mq_hw_ctx *);
 	void (*completed_request)(struct request *, u64);
 	void (*requeue_request)(struct request *);

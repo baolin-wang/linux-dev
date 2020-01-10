@@ -796,12 +796,13 @@ kyber_dispatch_cur_domain(struct kyber_queue_data *kqd,
 	return NULL;
 }
 
-static struct request *kyber_dispatch_request(struct blk_mq_hw_ctx *hctx)
+static int kyber_dispatch_requests(struct blk_mq_hw_ctx *hctx,
+				   struct list_head *list)
 {
 	struct kyber_queue_data *kqd = hctx->queue->elevator->elevator_data;
 	struct kyber_hctx_data *khd = hctx->sched_data;
 	struct request *rq;
-	int i;
+	int i, ret = 0;
 
 	spin_lock(&khd->lock);
 
@@ -811,8 +812,11 @@ static struct request *kyber_dispatch_request(struct blk_mq_hw_ctx *hctx)
 	 */
 	if (khd->batching < kyber_batch_size[khd->cur_domain]) {
 		rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
-		if (rq)
+		if (rq) {
+			list_add(&rq->queuelist, list);
+			ret = 1;
 			goto out;
+		}
 	}
 
 	/*
@@ -832,14 +836,16 @@ static struct request *kyber_dispatch_request(struct blk_mq_hw_ctx *hctx)
 			khd->cur_domain++;
 
 		rq = kyber_dispatch_cur_domain(kqd, khd, hctx);
-		if (rq)
+		if (rq) {
+			list_add(&rq->queuelist, list);
+			ret = 1;
 			goto out;
+		}
 	}
 
-	rq = NULL;
 out:
 	spin_unlock(&khd->lock);
-	return rq;
+	return ret;
 }
 
 static bool kyber_has_work(struct blk_mq_hw_ctx *hctx)
@@ -1020,7 +1026,7 @@ static struct elevator_type kyber_sched = {
 		.finish_request = kyber_finish_request,
 		.requeue_request = kyber_finish_request,
 		.completed_request = kyber_completed_request,
-		.dispatch_request = kyber_dispatch_request,
+		.dispatch_requests = kyber_dispatch_requests,
 		.has_work = kyber_has_work,
 	},
 #ifdef CONFIG_BLK_DEBUG_FS

@@ -4774,7 +4774,8 @@ static inline void bfq_update_dispatch_stats(struct request_queue *q,
 					     bool idle_timer_disabled) {}
 #endif /* CONFIG_BFQ_CGROUP_DEBUG */
 
-static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
+static int bfq_dispatch_requests(struct blk_mq_hw_ctx *hctx,
+				 struct list_head *list)
 {
 	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
 	struct request *rq;
@@ -4796,7 +4797,12 @@ static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
 	bfq_update_dispatch_stats(hctx->queue, rq, in_serv_queue,
 				  idle_timer_disabled);
 
-	return rq;
+	if (!rq)
+		return 0;
+
+	list_add(&rq->queuelist, list);
+
+	return 1;
 }
 
 /*
@@ -6772,7 +6778,7 @@ static struct elevator_type iosched_bfq_mq = {
 		.finish_request		= bfq_finish_requeue_request,
 		.exit_icq		= bfq_exit_icq,
 		.insert_requests	= bfq_insert_requests,
-		.dispatch_request	= bfq_dispatch_request,
+		.dispatch_requests	= bfq_dispatch_requests,
 		.next_request		= elv_rb_latter_request,
 		.former_request		= elv_rb_former_request,
 		.allow_merge		= bfq_allow_bio_merge,
